@@ -17,6 +17,17 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
+app.get("/", (_request, response) => {
+  response.json({
+    service: "CIA DO SILK - API Financeiro",
+    status: "online",
+    endpoints: {
+      health: "/api/health",
+      receivables: "/api/receivables?document=CPF_OU_CNPJ_SOMENTE_NUMEROS"
+    }
+  });
+});
+
 app.get("/api/health", (_request, response) => {
   response.json({
     status: "ok",
