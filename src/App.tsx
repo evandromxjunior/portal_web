@@ -1,6 +1,6 @@
 import { FormEvent, useMemo, useState } from "react";
 
-import { apiUrl } from "./api";
+import { apiUrl, fetchApi, getApiConfigurationError } from "./api";
 
 type Receivable = {
   id: string;
@@ -85,6 +85,7 @@ export default function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedBranchKey, setSelectedBranchKey] = useState("all");
   const normalizedDocument = useMemo(() => onlyDigits(document), [document]);
+  const apiConfigurationError = getApiConfigurationError();
 
   const branchGroups = useMemo(() => {
     const groups = new Map<
@@ -137,12 +138,9 @@ export default function App() {
     setSelectedBranchKey("all");
 
     try {
-      const response = await fetch(apiUrl(`/api/receivables?document=${normalizedDocument}`));
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message ?? "Não foi possível consultar os boletos.");
-      }
+      const data = await fetchApi<{ receivables?: Receivable[] }>(
+        `/api/receivables?document=${normalizedDocument}`
+      );
 
       setReceivables(data.receivables ?? []);
     } catch (currentError) {
@@ -193,6 +191,12 @@ export default function App() {
           <div className="hero-glow" />
         </section>
 
+        {apiConfigurationError ? (
+          <section className="section-container">
+            <div className="alert-error">{apiConfigurationError}</div>
+          </section>
+        ) : null}
+
         <section className="floating-search">
           <div className="glass-card">
             <form className="search-form" onSubmit={handleSubmit}>
@@ -207,7 +211,11 @@ export default function App() {
               />
               <button
                 className="search-button"
-                disabled={isLoading || (normalizedDocument.length !== 11 && normalizedDocument.length !== 14)}
+                disabled={
+                  isLoading ||
+                  Boolean(apiConfigurationError) ||
+                  (normalizedDocument.length !== 11 && normalizedDocument.length !== 14)
+                }
               >
                 {isLoading ? (
                   <span className="spinner" />
