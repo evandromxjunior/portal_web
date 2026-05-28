@@ -32,8 +32,36 @@ app.get("/api/health", (_request, response) => {
   response.json({
     status: "ok",
     mode: config.useMockData ? "mock" : "winthor-oracle",
-    totvsApiConfigured: Boolean(config.totvsApi.baseUrl)
+    totvsApiConfigured: Boolean(config.totvsApi.baseUrl),
+    oracleConfigured: Boolean(
+      config.oracle.user && config.oracle.password && config.oracle.connectString
+    )
   });
+});
+
+app.get("/api/health/oracle", async (_request, response) => {
+  if (config.useMockData) {
+    response.json({ status: "skipped", reason: "USE_MOCK_DATA=true" });
+    return;
+  }
+
+  try {
+    const pool = await getOraclePool();
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.execute("SELECT 1 AS ok FROM dual");
+      response.json({ status: "ok", message: "Conexao Oracle funcionando." });
+    } finally {
+      await connection.close();
+    }
+  } catch (error) {
+    response.status(500).json({
+      status: "error",
+      message: "Falha ao conectar no Oracle.",
+      detail: error instanceof Error ? error.message : String(error)
+    });
+  }
 });
 
 app.use("/api/receivables", receivablesRouter);

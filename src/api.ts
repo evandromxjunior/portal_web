@@ -19,6 +19,7 @@ export function getApiConfigurationError() {
 
 type ApiErrorBody = {
   message?: string;
+  detail?: string;
 };
 
 export async function fetchApi<T>(path: string): Promise<T> {
@@ -46,7 +47,8 @@ export async function fetchApi<T>(path: string): Promise<T> {
   const data = (await response.json()) as T & ApiErrorBody;
 
   if (!response.ok) {
-    throw new Error(data.message ?? "Nao foi possivel processar a solicitacao.");
+    const message = data.message ?? "Nao foi possivel processar a solicitacao.";
+    throw new Error(data.detail ? `${message} (${data.detail})` : message);
   }
 
   return data;
