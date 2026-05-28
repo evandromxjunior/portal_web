@@ -1,0 +1,40 @@
+{
+  "name": "intg-wint",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch server/src/index.ts",
+    "dev:web": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.server.json && vite build",
+    "start": "node dist/server/index.js",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "winthor:diagnose-boleto": "tsx server/src/scripts/diagnoseWinthorBoleto.ts",
+    "winthor:consulta-documento": "tsx server/src/scripts/queryWinthorDocument.ts",
+    "winthor:inspect-boleto": "tsx server/src/scripts/inspectWinthorBoletoFile.ts",
+    "totvs:token": "tsx server/src/scripts/generateTotvsToken.ts"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "oracledb": "^6.10.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.1",
+    "@types/oracledb": "^6.10.4",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "concurrently": "^9.2.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.14"
+  }
+}
