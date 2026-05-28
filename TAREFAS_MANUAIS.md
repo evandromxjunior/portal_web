@@ -1,73 +1,67 @@
-# O que voce precisa fazer manualmente
+# Tarefas manuais (atualizado)
 
-O restante (codigo, configs Railway/Docker, CORS, scripts) ja esta no GitHub.
+## Decisao de arquitetura
+
+**Vercel + Railway nao servem** para Oracle com IP fixo.  
+Use **VPS** ou **servidor Windows na empresa**.
+
+Guia completo: **[DEPLOY_VPS.md](./DEPLOY_VPS.md)**
 
 ---
 
-## 1. Railway — criar e publicar a API (~10 min)
+## Voce precisa fazer (resumo)
 
-1. Acesse [https://railway.app](https://railway.app) e entre com **GitHub**.
-2. **New Project** → **Deploy from GitHub repo** → escolha **`portal_web`**.
-3. O Railway deve detectar o `railway.toml` automaticamente.
-4. Aba **Variables** → **Raw Editor** → cole as variaveis do arquivo **`.env.production.example`**, preenchendo:
-   - `ORACLE_USER`
-   - `ORACLE_PASSWORD`
-   - `ORACLE_CONNECT_STRING` (igual ao seu `.env` local)
-5. Ajuste `CORS_ORIGIN` com a URL real do portal na Vercel (ex.: `https://ciadosilk-2via-portal.vercel.app`).
-6. **Settings** → **Networking** → **Generate Domain**.
-7. Copie a URL publica (ex.: `https://xxxx.up.railway.app`).
+### 1. Escolher onde rodar
 
-**Teste no navegador:** `https://SUA-URL.up.railway.app/api/health`  
-Deve aparecer `"status":"ok"`.
+| Opcao | Quando usar |
+|-------|-------------|
+| **Servidor Windows na empresa** | Ja acessa Oracle e pasta `\\10.0.1.3` |
+| **VPS Linux** | IP fixo na nuvem; PDF na rede interna nao funciona na VPS |
 
-Opcional no seu PC:
+### 2. Oracle — liberar IP
 
-```bash
-npm run verify:api -- https://SUA-URL.up.railway.app 85862589546
+1. Descubra o IP publico: https://ifconfig.me (no servidor ou na rede do servidor)
+2. Oracle Cloud → banco → **ACL** → adicione `SEU_IP/32`
+3. Teste: `http://servidor:3333/api/health/oracle` → `"status":"ok"`
+
+### 3. Instalar o sistema
+
+**Windows:** duplo clique em `iniciar-producao-windows.bat`  
+(antes: copie `.env` que ja funciona no seu PC)
+
+**Linux VPS:** veja [DEPLOY_VPS.md](./DEPLOY_VPS.md) caminho B
+
+### 4. Manter ligado
+
+Windows: `pm2 start ecosystem.config.cjs` + `pm2 save`  
+Linux: igual
+
+### 5. Internet (opcional)
+
+- Dominio apontando para o servidor
+- Nginx + HTTPS (exemplo em `nginx/ciadosilk-portal.conf.example`)
+- Ou Cloudflare Tunnel no servidor local
+
+### 6. Desligar Vercel/Railway (opcional)
+
+Nao sao mais necessarios se tudo rodar no servidor.
+
+---
+
+## Variaveis `.env` no servidor (producao)
+
+```env
+NODE_ENV=production
+HOST=0.0.0.0
+PORT=3333
+SERVE_WEB=true
+USE_MOCK_DATA=false
+ORACLE_USER=...
+ORACLE_PASSWORD=...
+ORACLE_CONNECT_STRING=...
+WINTHOR_DOCUMENT_COLUMN=CGCENT
+BOLETO_FILE_BASE_PATH=\\10.0.1.3\winthor-share-file\Winthor
+VITE_WHATSAPP_NUMBER=5511...
 ```
 
----
-
-## 2. Oracle Cloud — liberar acesso da Railway (~5 min)
-
-1. Console Oracle → banco Autonomous / PaaS usado pelo Winthor.
-2. **Network** → **Access Control List** (ou equivalente).
-3. Permita conexao externa (ex.: `0.0.0.0/0`) **ou** os IPs de saida da Railway.
-4. Salve e aguarde 1–2 minutos.
-
-Sem este passo a API sobe, mas a busca por CPF retorna erro 500.
-
----
-
-## 3. Vercel — ligar portal a API (~3 min)
-
-1. [vercel.com](https://vercel.com) → projeto do portal.
-2. **Settings** → **Environment Variables**:
-   - `VITE_API_URL` = `https://SUA-URL.up.railway.app` (sem `/` no final)
-   - `VITE_WHATSAPP_NUMBER` = numero com DDI (ex.: `5511999999999`)
-3. **Deployments** → ultimo deploy → **Redeploy**.
-
----
-
-## 4. Teste final
-
-1. Abra o portal na Vercel.
-2. Informe um CPF/CNPJ com titulos em aberto.
-3. Deve listar boletos sem erro de JSON.
-
----
-
-## Se algo falhar
-
-| Problema | O que verificar |
-|----------|------------------|
-| Erro JSON no portal | `VITE_API_URL` + redeploy Vercel |
-| `/api/health` nao abre | Deploy Railway falhou — ver **Logs** |
-| Health OK, CPF da 500 | Oracle ACL (passo 2) ou senha Oracle errada |
-| PDF nao abre | Normal na nuvem; PDF exige API na rede interna |
-
----
-
-## PDF na pasta `\\10.0.1.3` (opcional, depois)
-
-Se precisar do PDF do arquivo de rede, a API deve rodar em **servidor Windows na empresa**, nao na Railway. Veja `DEPLOY_API.md` opcao C.
+Build com WhatsApp: defina `VITE_WHATSAPP_NUMBER` **antes** de `npm run build:production`.

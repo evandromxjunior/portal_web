@@ -1,0 +1,19 @@
+# Copie para /etc/nginx/sites-available/ e ajuste server_name e porta.
+# Portal + API no Node (PM2) na porta 3333.
+
+server {
+    listen 80;
+    server_name boletos.ciadoscilk.com.br;
+
+    location / {
+        proxy_pass http://127.0.0.1:3333;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# HTTPS (apos certbot):
+# certbot --nginx -d boletos.ciadoscilk.com.br

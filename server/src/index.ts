@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import path from "node:path";
 
 import { config } from "./config.js";
 import { closeOraclePool, getOraclePool } from "./db/oracle.js";
@@ -17,16 +18,18 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
-app.get("/", (_request, response) => {
-  response.json({
-    service: "CIA DO SILK - API Financeiro",
-    status: "online",
-    endpoints: {
-      health: "/api/health",
-      receivables: "/api/receivables?document=CPF_OU_CNPJ_SOMENTE_NUMEROS"
-    }
+if (!config.serveWeb) {
+  app.get("/", (_request, response) => {
+    response.json({
+      service: "CIA DO SILK - API Financeiro",
+      status: "online",
+      endpoints: {
+        health: "/api/health",
+        receivables: "/api/receivables?document=CPF_OU_CNPJ_SOMENTE_NUMEROS"
+      }
+    });
   });
-});
+}
 
 app.get("/api/health", (_request, response) => {
   response.json({
@@ -68,6 +71,15 @@ app.use("/api/receivables", receivablesRouter);
 app.use("/api/whatsapp", whatsappRouter);
 app.use("/api/winthor-api", winthorApiRouter);
 
+if (config.serveWeb) {
+  const webRoot = path.resolve(process.cwd(), config.webRoot);
+  app.use(express.static(webRoot));
+
+  app.get(/^(?!\/api).*/, (_request, response) => {
+    response.sendFile(path.join(webRoot, "index.html"));
+  });
+}
+
 app.use((error: Error, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
   console.error(error);
 
@@ -78,7 +90,8 @@ app.use((error: Error, _request: express.Request, response: express.Response, _n
 });
 
 const server = app.listen(config.port, config.host, () => {
-  console.log(`API rodando em http://${config.host}:${config.port}`);
+  const modeLabel = config.serveWeb ? "Portal + API" : "API";
+  console.log(`${modeLabel} rodando em http://${config.host}:${config.port}`);
 
   if (!config.useMockData) {
     void getOraclePool()

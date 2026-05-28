@@ -27,6 +27,8 @@ export const config = {
   winthorReceivablesSql: process.env.WINTHOR_RECEIVABLES_SQL,
   winthorDocumentColumn: process.env.WINTHOR_DOCUMENT_COLUMN?.toUpperCase(),
   receivablesCacheTtlMs: Number(process.env.RECEIVABLES_CACHE_TTL_MS ?? 300_000),
+  serveWeb: (process.env.SERVE_WEB ?? "false").toLowerCase() === "true",
+  webRoot: process.env.WEB_ROOT ?? "dist-web",
   totvsApi: {
     baseUrl: process.env.TOTVS_API_BASE_URL,
     token: process.env.TOTVS_API_TOKEN,
