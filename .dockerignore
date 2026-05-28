@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-web
+.env
+.env.*
+!.env.production.example
+.git
+backup-front
+*.md
+!DEPLOY_API.md

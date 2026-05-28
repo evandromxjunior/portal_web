@@ -1,8 +1,20 @@
 import "dotenv/config";
 
+function parseCorsOrigin() {
+  const raw = process.env.CORS_ORIGIN?.trim();
+
+  if (!raw || raw === "*") {
+    return true;
+  }
+
+  return raw.split(",").map((origin) => origin.trim());
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3333),
+  host: process.env.HOST ?? "0.0.0.0",
   nodeEnv: process.env.NODE_ENV ?? "development",
+  corsOrigin: parseCorsOrigin(),
   useMockData: (process.env.USE_MOCK_DATA ?? "true").toLowerCase() === "true",
   oracle: {
     user: process.env.ORACLE_USER,

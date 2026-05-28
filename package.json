@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "concurrently \"npm:dev:api\" \"npm:dev:web\"",
     "dev:api": "tsx watch server/src/index.ts",
@@ -17,7 +20,8 @@
     "winthor:inspect-boleto": "tsx server/src/scripts/inspectWinthorBoletoFile.ts",
     "totvs:token": "tsx server/src/scripts/generateTotvsToken.ts",
     "totvs:probe-login": "tsx server/src/scripts/probeWtaLogin.ts",
-    "winthor:benchmark": "tsx server/src/scripts/benchmarkReceivablesQuery.ts"
+    "winthor:benchmark": "tsx server/src/scripts/benchmarkReceivablesQuery.ts",
+    "verify:api": "tsx server/src/scripts/verifyApiDeploy.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

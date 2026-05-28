@@ -10,7 +10,11 @@ import { winthorApiRouter } from "./routes/winthorApi.js";
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: config.corsOrigin
+  })
+);
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/api/health", (_request, response) => {
@@ -34,8 +38,8 @@ app.use((error: Error, _request: express.Request, response: express.Response, _n
   });
 });
 
-const server = app.listen(config.port, () => {
-  console.log(`API rodando em http://localhost:${config.port}`);
+const server = app.listen(config.port, config.host, () => {
+  console.log(`API rodando em http://${config.host}:${config.port}`);
 
   if (!config.useMockData) {
     void getOraclePool()

@@ -1,6 +1,10 @@
 # Deploy da API (Node + Oracle)
 
+> **Checklist rapido:** veja [TAREFAS_MANUAIS.md](./TAREFAS_MANUAIS.md) — lista so o que voce precisa fazer na Railway, Oracle e Vercel.
+
 O portal na **Vercel** é só o frontend. A consulta de boletos precisa desta API publicada na internet.
+
+Arquivos de deploy ja incluidos no repo: `railway.toml`, `render.yaml`, `Dockerfile`, `.env.production.example`.
 
 ## Visão geral
 

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ciadosilk-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build:api
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: USE_MOCK_DATA
+        value: false
+      - key: WINTHOR_DOCUMENT_COLUMN
+        value: CGCENT
+      - key: ORACLE_USER
+        sync: false
+      - key: ORACLE_PASSWORD
+        sync: false
+      - key: ORACLE_CONNECT_STRING
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
