@@ -20,3 +20,21 @@ export function maskDocument(value: string) {
 
   return value;
 }
+
+/** Variantes comuns de CPF/CNPJ no WINTHOR (com e sem mascara). */
+export function documentLookupVariants(value: string) {
+  const digits = onlyDigits(value);
+  const variants = new Set<string>();
+
+  if (!digits) {
+    return [];
+  }
+
+  variants.add(digits);
+
+  if (digits.length === 11 || digits.length === 14) {
+    variants.add(maskDocument(digits));
+  }
+
+  return [...variants];
+}

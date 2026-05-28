@@ -8,12 +8,15 @@
     "dev:api": "tsx watch server/src/index.ts",
     "dev:web": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.server.json && vite build",
+    "build:web": "vite build",
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "winthor:diagnose-boleto": "tsx server/src/scripts/diagnoseWinthorBoleto.ts",
     "winthor:consulta-documento": "tsx server/src/scripts/queryWinthorDocument.ts",
     "winthor:inspect-boleto": "tsx server/src/scripts/inspectWinthorBoletoFile.ts",
-    "totvs:token": "tsx server/src/scripts/generateTotvsToken.ts"
+    "totvs:token": "tsx server/src/scripts/generateTotvsToken.ts",
+    "totvs:probe-login": "tsx server/src/scripts/probeWtaLogin.ts",
+    "winthor:benchmark": "tsx server/src/scripts/benchmarkReceivablesQuery.ts"
   },
   "dependencies": {
     "cors": "^2.8.6",

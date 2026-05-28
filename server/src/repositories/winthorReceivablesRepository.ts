@@ -2,9 +2,8 @@ import oracledb from "oracledb";
 
 import { config } from "../config.js";
 import { getOraclePool } from "../db/oracle.js";
-import { resolveBoletoPdfPath } from "../services/boletoFileService.js";
 import type { Receivable, ReceivableStatus, ReceivablesRepository } from "../types.js";
-import { maskDocument, onlyDigits } from "../utils/document.js";
+import { documentLookupVariants, maskDocument, onlyDigits } from "../utils/document.js";
 
 type OracleReceivableRow = {
   ID?: string;
@@ -50,6 +49,13 @@ const boletoColumnCandidates = {
 let pcprestColumnsCache: Set<string> | undefined;
 let pcclientColumnsCache: Set<string> | undefined;
 let pcfilialColumnsCache: Set<string> | undefined;
+let winthorDocumentColumnCache: string | undefined;
+let receivablesSqlTemplateCache: string | undefined;
+
+const customerCodesByDocumentCache = new Map<
+  string,
+  { codes: Array<number | string>; expiresAt: number }
+>();
 
 async function getPcprestColumns(connection: oracledb.Connection) {
   if (pcprestColumnsCache) {
@@ -127,16 +133,34 @@ function optionalColumn(columns: Set<string>, candidates: string[]) {
   return candidates.find((candidate) => columns.has(candidate));
 }
 
+function buildClientCodesFilter(clientCodes: Array<number | string>) {
+  if (clientCodes.length === 1) {
+    return {
+      clause: "p.codcli = :codcli0",
+      binds: { codcli0: clientCodes[0] } as Record<string, number | string>
+    };
+  }
+
+  const binds: Record<string, number | string> = {};
+  const placeholders = clientCodes.map((code, index) => {
+    const key = `codcli${index}`;
+    binds[key] = code;
+    return `:${key}`;
+  });
+
+  return {
+    clause: `p.codcli IN (${placeholders.join(", ")})`,
+    binds
+  };
+}
+
 function buildDefaultWinthorReceivablesSql(
   pcprestColumns: Set<string>,
   pcclientColumns: Set<string>,
-  pcfilialColumns: Set<string>
+  pcfilialColumns: Set<string>,
+  clientFilterClause: string
 ) {
-  const documentColumn = requiredColumn(
-    pcclientColumns,
-    ["CGCENT", "CGCCPF", "CNPJCPF", "CNPJ_CPF", "CPF", "CNPJ"],
-    "PCCLIENT"
-  );
+  const documentColumn = getWinthorDocumentColumn(pcclientColumns);
   const lineDigitavel = columnExpression(
     pcprestColumns,
     boletoColumnCandidates.lineDigitavel,
@@ -156,7 +180,7 @@ function buildDefaultWinthorReceivablesSql(
   const filialKeyColumn = optionalColumn(pcfilialColumns, ["CODIGO", "CODFILIAL"]);
   const hasFilialJoin = Boolean(branchColumn && filialKeyColumn);
   const filialJoin = hasFilialJoin
-    ? `LEFT JOIN pcfilial f ON TO_CHAR(f.${filialKeyColumn}) = TO_CHAR(p.${branchColumn})`
+    ? `LEFT JOIN pcfilial f ON f.${filialKeyColumn} = p.${branchColumn}`
     : "";
   const branchCode = branchColumn ? `TO_CHAR(p.${branchColumn}) AS branch_code` : "NULL AS branch_code";
   const branchName = hasFilialJoin
@@ -196,11 +220,141 @@ function buildDefaultWinthorReceivablesSql(
   FROM pcprest p
   JOIN pcclient c ON c.codcli = p.codcli
   ${filialJoin}
-  WHERE REGEXP_REPLACE(c.${documentColumn}, '[^0-9]', '') = :document
+  WHERE ${clientFilterClause}
     AND p.dtpag IS NULL
     AND NVL(p.valor, 0) > NVL(p.vpago, 0)
-  ORDER BY branch_name, branch_code, p.dtvenc
+  ORDER BY p.dtvenc, branch_code
 `;
+}
+
+function getWinthorDocumentColumn(pcclientColumns: Set<string>) {
+  if (config.winthorDocumentColumn && pcclientColumns.has(config.winthorDocumentColumn)) {
+    return config.winthorDocumentColumn;
+  }
+
+  if (winthorDocumentColumnCache) {
+    return winthorDocumentColumnCache;
+  }
+
+  winthorDocumentColumnCache = requiredColumn(
+    pcclientColumns,
+    ["CGCENT", "CGCCPF", "CNPJCPF", "CNPJ_CPF", "CPF", "CNPJ"],
+    "PCCLIENT"
+  );
+
+  return winthorDocumentColumnCache;
+}
+
+function getReceivablesSqlTemplate(
+  pcprestColumns: Set<string>,
+  pcclientColumns: Set<string>,
+  pcfilialColumns: Set<string>
+) {
+  if (receivablesSqlTemplateCache) {
+    return receivablesSqlTemplateCache;
+  }
+
+  receivablesSqlTemplateCache = buildDefaultWinthorReceivablesSql(
+    pcprestColumns,
+    pcclientColumns,
+    pcfilialColumns,
+    "__CLIENT_FILTER__"
+  );
+
+  return receivablesSqlTemplateCache;
+}
+
+function canOfferLazyBoletoPdf(row: OracleReceivableRow) {
+  return Boolean(
+    row.BOLETO_URL ||
+      row.PDF_BASE64 ||
+      row.LINE_DIGITAVEL ||
+      row.BARCODE ||
+      row.NOSSO_NUMERO ||
+      row.BOLETO_FILE_NAME ||
+      row.BOLETO_FILE_PATH
+  );
+}
+
+function readCachedCustomerCodes(documentDigits: string) {
+  const cached = customerCodesByDocumentCache.get(documentDigits);
+
+  if (!cached || cached.expiresAt <= Date.now()) {
+    if (cached) {
+      customerCodesByDocumentCache.delete(documentDigits);
+    }
+
+    return undefined;
+  }
+
+  return cached.codes;
+}
+
+function writeCachedCustomerCodes(documentDigits: string, codes: Array<number | string>) {
+  customerCodesByDocumentCache.set(documentDigits, {
+    codes,
+    expiresAt: Date.now() + config.receivablesCacheTtlMs
+  });
+}
+
+async function findCustomerCodesByDocument(
+  connection: oracledb.Connection,
+  pcclientColumns: Set<string>,
+  document: string
+) {
+  const documentDigits = onlyDigits(document);
+  const cachedCodes = readCachedCustomerCodes(documentDigits);
+
+  if (cachedCodes) {
+    return cachedCodes;
+  }
+
+  const documentColumn = getWinthorDocumentColumn(pcclientColumns);
+  const variants = documentLookupVariants(documentDigits);
+  const exactBinds: Record<string, string> = {};
+
+  variants.forEach((variant, index) => {
+    exactBinds[`doc${index}`] = variant;
+  });
+
+  const exactClause = variants
+    .map((_, index) => `${documentColumn} = :doc${index}`)
+    .join(" OR ");
+
+  const exactResult = await connection.execute<{ CODCLI: number | string }>(
+    `
+      SELECT codcli
+      FROM pcclient
+      WHERE ${exactClause}
+      FETCH FIRST 20 ROWS ONLY
+    `,
+    exactBinds,
+    oracleFetchOptions
+  );
+
+  let codes = (exactResult.rows ?? [])
+    .map((row) => row.CODCLI)
+    .filter((code): code is number | string => code !== undefined && code !== null);
+
+  if (codes.length === 0) {
+    const fallbackResult = await connection.execute<{ CODCLI: number | string }>(
+      `
+        SELECT codcli
+        FROM pcclient
+        WHERE REPLACE(REPLACE(REPLACE(TRIM(${documentColumn}), '.', ''), '-', ''), '/', '') = :document
+        FETCH FIRST 20 ROWS ONLY
+      `,
+      { document: documentDigits },
+      oracleFetchOptions
+    );
+
+    codes = (fallbackResult.rows ?? [])
+      .map((row) => row.CODCLI)
+      .filter((code): code is number | string => code !== undefined && code !== null);
+  }
+
+  writeCachedCustomerCodes(documentDigits, codes);
+  return codes;
 }
 
 function toIsoDate(value: Date | string | undefined) {
@@ -232,16 +386,6 @@ function mapRow(row: OracleReceivableRow): Receivable {
   const invoiceNumber = row.INVOICE_NUMBER ? String(row.INVOICE_NUMBER) : "";
   const installment = row.INSTALLMENT ? String(row.INSTALLMENT) : undefined;
   const id = String(row.ID ?? `${row.CUSTOMER_CODE}-${invoiceNumber}-${installment ?? "1"}`);
-  const localPdfPath = resolveBoletoPdfPath({
-    id,
-    customerCode: row.CUSTOMER_CODE ? String(row.CUSTOMER_CODE) : undefined,
-    invoiceNumber,
-    installment,
-    barcode: row.BARCODE,
-    nossoNumero: row.NOSSO_NUMERO,
-    boletoFileName: row.BOLETO_FILE_NAME,
-    boletoFilePath: row.BOLETO_FILE_PATH
-  });
 
   return {
     id,
@@ -259,9 +403,38 @@ function mapRow(row: OracleReceivableRow): Receivable {
     paymentDate: row.PAYMENT_DATE ? toIsoDate(row.PAYMENT_DATE) : null,
     status: getStatus(row),
     lineDigitavel: row.LINE_DIGITAVEL ?? null,
-    boletoUrl: row.BOLETO_URL ?? (localPdfPath ? `/api/receivables/${encodeURIComponent(id)}/pdf` : null),
+    boletoUrl:
+      row.BOLETO_URL ??
+      (canOfferLazyBoletoPdf(row) ? `/api/receivables/${encodeURIComponent(id)}/pdf` : null),
     pdfBase64: row.PDF_BASE64 ?? null
   };
+}
+
+const oracleFetchOptions = {
+  outFormat: oracledb.OUT_FORMAT_OBJECT,
+  prefetchRows: 50,
+  fetchArraySize: 50
+} as const;
+
+export async function warmWinthorReceivablesSchema() {
+  if (config.useMockData || config.winthorReceivablesSql) {
+    return;
+  }
+
+  const pool = await getOraclePool();
+  const connection = await pool.getConnection();
+
+  try {
+    const [pcprestColumns, pcclientColumns, pcfilialColumns] = await Promise.all([
+      getPcprestColumns(connection),
+      getPcclientColumns(connection),
+      getPcfilialColumns(connection)
+    ]);
+
+    getReceivablesSqlTemplate(pcprestColumns, pcclientColumns, pcfilialColumns);
+  } finally {
+    await connection.close();
+  }
 }
 
 export const winthorReceivablesRepository: ReceivablesRepository = {
@@ -270,17 +443,42 @@ export const winthorReceivablesRepository: ReceivablesRepository = {
     const connection = await pool.getConnection();
 
     try {
-      const defaultSql = config.winthorReceivablesSql
-        ? undefined
-        : buildDefaultWinthorReceivablesSql(
-            await getPcprestColumns(connection),
-            await getPcclientColumns(connection),
-            await getPcfilialColumns(connection)
-          );
+      if (config.winthorReceivablesSql) {
+        const result = await connection.execute<OracleReceivableRow>(
+          config.winthorReceivablesSql,
+          { document: onlyDigits(document) },
+          oracleFetchOptions
+        );
+
+        return (result.rows ?? []).map(mapRow);
+      }
+
+      const [pcprestColumns, pcclientColumns, pcfilialColumns] = await Promise.all([
+        getPcprestColumns(connection),
+        getPcclientColumns(connection),
+        getPcfilialColumns(connection)
+      ]);
+
+      const clientCodes = await findCustomerCodesByDocument(
+        connection,
+        pcclientColumns,
+        document
+      );
+
+      if (clientCodes.length === 0) {
+        return [];
+      }
+
+      const { clause: clientFilterClause, binds: clientBinds } = buildClientCodesFilter(clientCodes);
+      const sql = getReceivablesSqlTemplate(
+        pcprestColumns,
+        pcclientColumns,
+        pcfilialColumns
+      ).replace("__CLIENT_FILTER__", clientFilterClause);
       const result = await connection.execute<OracleReceivableRow>(
-        config.winthorReceivablesSql ?? defaultSql!,
-        { document: onlyDigits(document) },
-        { outFormat: oracledb.OUT_FORMAT_OBJECT }
+        sql,
+        clientBinds,
+        oracleFetchOptions
       );
 
       return (result.rows ?? []).map(mapRow);

@@ -90,13 +90,19 @@ async function getAuthToken() {
 
   const payload = await response.json();
   const token = readNestedValue(payload, config.totvsApi.tokenField);
+  const fallbackToken =
+    token ??
+    readNestedValue(payload, "accessToken") ??
+    readNestedValue(payload, "acessToken") ??
+    readNestedValue(payload, "access_token") ??
+    readNestedValue(payload, "data.token");
 
-  if (!token) {
+  if (!fallbackToken) {
     throw new Error(`Token nao encontrado no campo ${config.totvsApi.tokenField}.`);
   }
 
-  cachedToken = token;
-  return token;
+  cachedToken = fallbackToken;
+  return fallbackToken;
 }
 
 export async function requestTotvsApi<T>(path: string, options: RequestOptions = {}) {

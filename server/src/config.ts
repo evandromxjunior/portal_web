@@ -13,6 +13,8 @@ export const config = {
     basePath: process.env.BOLETO_FILE_BASE_PATH
   },
   winthorReceivablesSql: process.env.WINTHOR_RECEIVABLES_SQL,
+  winthorDocumentColumn: process.env.WINTHOR_DOCUMENT_COLUMN?.toUpperCase(),
+  receivablesCacheTtlMs: Number(process.env.RECEIVABLES_CACHE_TTL_MS ?? 300_000),
   totvsApi: {
     baseUrl: process.env.TOTVS_API_BASE_URL,
     token: process.env.TOTVS_API_TOKEN,

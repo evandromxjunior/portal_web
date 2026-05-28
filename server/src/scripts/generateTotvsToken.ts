@@ -94,6 +94,7 @@ async function main() {
     readNestedValue(payload, tokenField) ??
     readNestedValue(payload, "access_token") ??
     readNestedValue(payload, "accessToken") ??
+    readNestedValue(payload, "acessToken") ??
     readNestedValue(payload, "data.token");
 
   console.log("\nResposta da API:");

@@ -1,5 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 
+import { apiUrl } from "./api";
+
 type Receivable = {
   id: string;
   customerCode?: string;
@@ -135,7 +137,7 @@ export default function App() {
     setSelectedBranchKey("all");
 
     try {
-      const response = await fetch(`/api/receivables?document=${normalizedDocument}`);
+      const response = await fetch(apiUrl(`/api/receivables?document=${normalizedDocument}`));
       const data = await response.json();
 
       if (!response.ok) {
@@ -161,7 +163,10 @@ export default function App() {
 
   function openBoleto(receivable: Receivable) {
     if (receivable.boletoUrl) {
-      window.open(receivable.boletoUrl, "_blank", "noopener,noreferrer");
+      const url = receivable.boletoUrl.startsWith("/")
+        ? apiUrl(receivable.boletoUrl)
+        : receivable.boletoUrl;
+      window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
 

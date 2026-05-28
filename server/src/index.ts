@@ -2,7 +2,8 @@ import cors from "cors";
 import express from "express";
 
 import { config } from "./config.js";
-import { closeOraclePool } from "./db/oracle.js";
+import { closeOraclePool, getOraclePool } from "./db/oracle.js";
+import { warmWinthorReceivablesSchema } from "./repositories/winthorReceivablesRepository.js";
 import { receivablesRouter } from "./routes/receivables.js";
 import { whatsappRouter } from "./routes/whatsapp.js";
 import { winthorApiRouter } from "./routes/winthorApi.js";
@@ -35,6 +36,15 @@ app.use((error: Error, _request: express.Request, response: express.Response, _n
 
 const server = app.listen(config.port, () => {
   console.log(`API rodando em http://localhost:${config.port}`);
+
+  if (!config.useMockData) {
+    void getOraclePool()
+      .then(() => warmWinthorReceivablesSchema())
+      .then(() => console.log("Cache de schema WINTHOR aquecido."))
+      .catch((error) => {
+        console.warn("Nao foi possivel aquecer cache do WINTHOR:", error.message);
+      });
+  }
 });
 
 async function shutdown() {
