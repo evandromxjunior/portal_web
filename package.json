@@ -9,6 +9,7 @@
     "dev:web": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.server.json && vite build",
     "build:web": "vite build",
+    "build:api": "tsc -p tsconfig.server.json",
     "start": "node dist/server/index.js",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "winthor:diagnose-boleto": "tsx server/src/scripts/diagnoseWinthorBoleto.ts",
